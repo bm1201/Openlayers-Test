@@ -6,6 +6,7 @@
             지도 중심 이동 함수 that, this 제거
  2023-10-20 오버레이 함수 통합
  2023-10-25 팝업 함수 제거
+ 2023-10-26 폴리라인 함수 생성시 style 선택기능 추가
 */
 
 import Map from 'ol/Map.js';
@@ -330,9 +331,10 @@ const OL = new ($Class({
             //layer에 폴리라인 추가
             addPolyline: function (obj) {
                 // obj = { 
-                //     lid  : layerId
-                //     fid  : featureId
-                //     data : [[경도, 위도], [경도, 위도], ....]
+                //     lid   : layerId
+                //     fid   : featureId
+                //     data  : [[경도, 위도], [경도, 위도], ....]
+                //     state : 1
                 // }
                 const coordlist = obj.data;
                 const lyr = this.getLayer({lid : obj.lid});
@@ -351,6 +353,7 @@ const OL = new ($Class({
                 lineStr[0].fid = obj.fid;
                 
                 lyr.getSource().addFeatures(lineStr);
+                lyr.setStyle(lyr.istyle[obj.state]);
             },
             //layer에 특정 feature 조회
             getFeature: function (obj) {
