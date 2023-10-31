@@ -5,7 +5,7 @@ function App() {
 
     useEffect(() => {
 		//마커 표출 레이어생성
-		OL.map.addLayer({
+		const lyr1 = OL.map.addLayer({
 			lid : 'lyr1', 	 //레이어ID
 			type : 'vector', //레이어타입
 			minZoom : 7, 	 //지도 최소 줌 zoom이 설정값 보다 작아지면 레이어 위에 정보들이 숨겨짐
@@ -29,7 +29,7 @@ function App() {
 		});
 
 		//폴리라인 표출 레이어생성
-		OL.map.addLayer({
+		const lyr2 = OL.map.addLayer({
 			lid : 'lyr2',
 			type : 'vector',
 			minZoom : 7,
@@ -115,6 +115,48 @@ function App() {
 			data : coordDatalist, //폴리라인 생성 좌표값[[위도, 경도], [위도, 경도], ...]
 			state : 1 //레이어 생성할 때 만든 style 배열의 순번으로 입력받은 순번의 색깔로 폴리라인 생성
 		});
+
+		//생성한 마커에 drag 이벤트 추가
+		const marker = OL.map.getFeatureAll({lid : 'lyr1'})
+
+		OL.map.setDragEvt({
+			evtId  : marker.fid, //이벤트ID => 추후 이벤트 제거할 때 필요
+			ftrArr : marker	 	 //이벤트를 추가할 마커 배열
+		});
+
+		//생성한 마커에 원 애니메이션 추가
+		
+		const fcltLyrEvt = OL.map.addLayer({//이벤트 레이어 생성
+			lid : 'fcltEvt', //레이어명
+			type : 'vector', //레이어타입
+			minZoom : 7, //레이어가 표출되는 최소 줌
+			fcltEvt: ["circle"]
+		});
+
+		OL.map.changeZIndex([fcltLyrEvt, lyr1]);
+
+		const eventMarker = OL.map.addFeature({
+			lid: "fcltEvt",
+			fid: 'test', //장비ID
+			xy: [126.95518245, 37.39256374],
+			state: 0
+		});
+
+		OL.map.playFcltEvt(eventMarker, 1000);
+
+		///팝업창 호출
+		const html = '<h1 style="font-size:50px; margin-top:-100px;margin-left:-15px;font-weight:bold">' + 'test' + '</h1>';
+
+		const template = document.createElement('template');
+		template.innerHTML = html;
+
+		let obj = {
+			oid : 'test', 
+			element : template.content.firstChild, 
+			coord : [126.95518245, 37.39256374]
+		}
+
+		OL.map.addOverlay(obj);
     }, [])
 
     return (

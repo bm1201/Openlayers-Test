@@ -511,6 +511,7 @@ const OL = new ($Class({
                     }
                 });
             },
+            // 마우스휠 이벤트 추가
             setWheelEvt: function () {
                 let that = this;
                 that.map.getView().on('change:resolution', function (e) {
@@ -558,7 +559,7 @@ const OL = new ($Class({
                 const start = Date.now();
                 const flashGeom = feature.getGeometry().clone();
                 
-                const listenerKey = this.getLayer({lid : "fcltEvt"}).on('postrender', animate);
+                const listenerKey = this.getLayer({lid : feature.layer.lid}).on('postrender', animate);
 
                 function animate(event) {
                     const frameState = event.frameState;
@@ -594,11 +595,11 @@ const OL = new ($Class({
                     map.render();
                 }
 
-                if(this.getFeature({lid : "fcltEvt", fid : feature.fid})){
-                    this.removeFeature({lid : "fcltEvt", fid : feature.fid})
+                if(this.getFeature({lid : feature.layer.lid, fid : feature.fid})){
+                    this.removeFeature({lid : feature.layer.lid, fid : feature.fid})
                 }
 
-                this.getLayer({lid : "fcltEvt"}).getSource().addFeature(feature);
+                this.getLayer({lid : feature.layer.lid}).getSource().addFeature(feature);
             },
 
             /******************** 미사용함수 ********************/
