@@ -2,6 +2,7 @@ import React, { useEffect, useState, useContext, useRef } from 'react';
 import CompMap from './CompMap';
 import OL from '../public/js/ol-custom-1.0.0.js';
 function App() {
+	const timer = useRef();
 
     useEffect(() => {
 		//마커 표출 레이어생성
@@ -142,7 +143,14 @@ function App() {
 			state: 0
 		});
 
-		OL.map.playFcltEvt(eventMarker, 1000);
+		if(timer.current !== null){
+			clearInterval(timer.current);
+			timer.current = null;
+		}
+
+		timer.current = setInterval(() => {
+			OL.map.playFcltEvt(eventMarker, 1000);
+		}, 1000)
 
 		///팝업창 호출
 		const html = '<h1 style="font-size:50px; margin-top:-100px;margin-left:-15px;font-weight:bold">' + 'test' + '</h1>';
