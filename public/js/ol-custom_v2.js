@@ -1,16 +1,35 @@
-/*
- @author ByungMin
- @since 2023-09-24 <br/>
- @note
- 2023-10-19 드래그 관련 이벤트(setDragEvt(obj), removeDragEvt(obj))로 변경
-            지도 중심 이동 함수 that, this 제거
- 2023-10-20 오버레이 함수 통합
- 2023-10-25 팝업 함수 제거
- 2023-10-26 폴리라인 함수 생성시 style 선택기능 추가
-*/
+/**
+ * @author ByungMin
+ * @since 2023-09-24 <br/>
+ * @note
+ * 
+ * 2023-10-19 드래그 관련 이벤트(setDragEvt(obj), removeDragEvt(obj))로 변경
+ *            지도 중심 이동 함수 that, this 제거
+ * 2023-10-20 오버레이 함수 통합
+ * 2023-10-25 팝업 함수 제거
+ * 2023-10-26 폴리라인 함수 생성시 style 선택기능 추가
+ * 2024-03-05 함수추가
+ *            1. setVisibleEvt(layer) - 전달받은 레이어 보여주기
+ *            2. setVisibleAllEvt() - 모든 레이어 보여주기
+ *            3. setHiddenAllEvt() - 모든 레이어 숨기기
+ *            4. changeCanvas() - TileLayer를 교체하는 방법으로 라이트/다크모드 변경
+ *            우리나라 유효좌표 밖에 있는 좌표의 경우 표출하지 않는 기능 추가(우리나라 유효좌표 (124.5 < lon < 132.0) / (33 < lat < 38.9), addFeature 참고)
+ * 2024-03-06 addFeature()에서 data에 해당 feature의 정보도 저장
+ *            addPolyline()에서 data에 해당 polyline의 정보도 저장
+ *            moveEvt() - spd(속도)로 route(이동경로)대로 ftr(이동 마커)이 이동하는 함수
+ *            setHiddenAllEvt(), setVisibleAllEvt()에서 TileLayer는 제외하고 처리하도록 수정
+ * 2024-03-07 마커 클릭 시 커서 포인터로 변경
+ *            addFeature(), addPolyline()에서 type 정보도 저장
+ * 2024-03-07 레이어 클릭 시 overlay 모두 삭제 처리.
+ * 2024-03-11 폴리라인 클릭 시 오류 처리 (layer.values_ -> layer?.values_).
+ * 2024-03-14 addLayer함수에 heatmap타입 추가
+ *            addFeature함수에 addPolyline함수 통합 및 히트맵마커 표출기능 추가
+ *  
+ */
 
 import Map from 'ol/Map.js';
 import TileLayer from 'ol/layer/Tile';
+import HeatmapLayer from 'ol/layer/Heatmap.js'
 import { OSM } from 'ol/source.js';
 import View from 'ol/View.js';
 import VectorLayer from 'ol/layer/Vector.js';
@@ -27,6 +46,7 @@ import { Fill, Stroke, Style, Icon, Circle } from 'ol/style.js';
 import { Draw, Modify, Snap } from 'ol/interaction.js';
 import { transform } from 'ol/proj';
 import { Zoom, ZoomSlider, ScaleLine} from 'ol/control.js'
+import StadiaMaps from 'ol/source/StadiaMaps.js';
 
 const $Class = function (oClassMember) {
     function ClassOrigin() {
@@ -72,14 +92,19 @@ const OL = new ($Class({
         // obj = target
         let map = new Map({
             layers: [
-                new TileLayer({
-                    source: new OSM()
-                })
+                new TileLayer({//가장 바탕이 되는 레이어
+                    source: new StadiaMaps({ //StadiaMaps 다크모드
+                        layer: 'alidade_smooth_dark',
+                        retina: true,
+                        apiKey: '146a217e-fcd4-44dd-a057-8093894c7f05'
+                    }),
+                    type : "Tile"
+                }),
             ],
             target: obj.target,
             view: new View({
                 projection: 'EPSG:4326',
-                center: [126.9568209, 37.3942527], //안산시청
+                center: [126.9568209, 37.3942527], //지도의 중심 좌표 - 현재(안양시청)
                 zoom: 16
             }),
             controls: [new Zoom(), new ZoomSlider(), new ScaleLine()]
@@ -94,6 +119,50 @@ const OL = new ($Class({
                 this.setClickEvt();
                 this.setHoverEvt();
                 this.setWheelEvt();
+            },
+            /******************** 라이트/다크 모드변경 ********************/
+            //TileLayer를 교체하는 방법으로 모드 변경구현
+            changeCanvas: function(obj){
+                if(obj.type === "ligth"){
+                    //tileLayer 제거
+                    let layers = this.map.getLayers().getArray();
+                    for(let layer of layers){
+                        if(layer.values_.type === 'Tile'){
+                            this.map.removeLayer(layer);
+                            break;
+                        }
+                    }
+
+                    //라이트모드 tileLayer
+                    const lightLyr = new TileLayer({
+                        source: new OSM(), //구글지도
+                        type : "Tile"
+                    })
+
+                    lightLyr.setZIndex(0);
+                    this.map.addLayer(lightLyr);
+                }else if(obj.type === "dark"){
+                    //tileLayer 제거
+                    let layers = this.map.getLayers().getArray();
+                    for(let layer of layers){
+                        if(layer.values_.type === 'Tile'){
+                            this.map.removeLayer(layer);
+                            break;
+                        }
+                    }
+
+                    const darkLyr = new TileLayer({
+                        source: new StadiaMaps({ //StadiaMaps 다크모드
+                            layer: 'alidade_smooth_dark',
+                            retina: true,
+                            apiKey: '146a217e-fcd4-44dd-a057-8093894c7f05'
+                        }),
+                        type : "Tile"
+                    });
+
+                    darkLyr.setZIndex(0);
+                    this.map.addLayer(darkLyr);
+                }
             },
             /******************** 지도 중심 이동 함수 ********************/
             setCenter: function (mapCenter) {
@@ -126,9 +195,14 @@ const OL = new ($Class({
             /*레이어 추가*/
             addLayer: function (obj) {
                 // obj = type / lid / name / urls / onSelect / minZoom / unSelect / onmouseenter / onmouseleave / styles
-                if (this.map === null) return null;
+                if (this.map === null) {
+                    return null
+                }
+
                 let layer = this.getLayer(obj);
-                if (layer !== null) return layer;
+                if (layer !== null){
+                    return layer
+                }
 
                 switch (obj.type) {
                     case 'vector':
@@ -140,6 +214,7 @@ const OL = new ($Class({
                         });
 
                         layer.lid = obj.lid;
+                        layer.type = "vector"
                         layer.istyle = [];
                         layer.minZoom = obj.minZoom;
                         layer.click = obj.click;
@@ -147,6 +222,7 @@ const OL = new ($Class({
                         layer.unSelect = obj.unSelect;
                         layer.onmouseenter = obj.onmouseenter;
                         layer.onmouseleave = obj.onmouseleave;
+                        layer.setZIndex(obj.zIndex || 0);
 
                         this.map.addLayer(layer);
 
@@ -223,6 +299,25 @@ const OL = new ($Class({
                             layer.setStyle(layer.istyle[0]);
                         }
                         break;
+                    case 'heatmap':
+                        let hsrc = new VectorSource({
+                            features: []
+                        });
+                        
+                        layer = new HeatmapLayer({
+                            source: hsrc,
+                            blur: obj.blur || 15,
+                            radius: obj.radius || 20,
+                            opacity: obj.opacity || 0.8
+                        });
+                        
+                        layer.lid = obj.lid;//레이어 ID 설정
+                        layer.type = "heatmap"
+                        layer.setZIndex(obj.zIndex || 0);//레이어 zIndex 설정
+
+                        //지도에 레이어추가
+                        this.map.addLayer(layer);
+                        break;
                     default:
                         console.log(obj.type);
                 }
@@ -292,68 +387,99 @@ const OL = new ($Class({
             },
 
             /******************** Feature 관련 함수 ********************/
-            //layer에 마커 추가
+            //layer에 Feature 추가 - 마커, 폴리라인, 히트맵 가능
             addFeature: function (obj) {
-                // obj = { 
-                //     lid : layerId
-                //     fid : featureId
-                //     xy  : [경도, 위도]
-                //     state : 표출 이미지(layer 속성 중 URL의 index 번호)
-                // }
-
                 let layer = this.getLayer(obj);
-                
+
                 if (layer === null){//layer가 없는 경우
                     return null;
                 }
+                
+                if(layer.type === 'heatmap'){//히트맵인 경우
+                    let src = layer.getSource();
                     
-                let src = layer.getSource();
+                    let ftr = this.getFeature(obj);
 
-                let ftr = this.getFeature(obj);
-
-                if (ftr === null) {
-                    if (layer.istyle.length < obj.state + 1) {
-                        obj.state = 0;
+                    if (ftr === null) {
+                        if(124.5 < obj.xy[0] && obj.xy[0] < 132.0 && 33 < obj.xy[1] && obj.xy[1] < 38.9){
+                            //우리나라 유효좌표 안에 있는 경우 생성
+                            ftr = new Feature({ geometry: new Point(obj.xy) });
+                            ftr.fid = obj.fid;
+                            ftr.type = 'heatMap';
+                            ftr.layer = layer;
+                            ftr.weight = obj.weight;
+                            src.addFeature(ftr);
+                        }
                     }
 
-                    let istyle = layer.istyle[obj.state];
-
-                    ftr = new Feature({ geometry: new Point(obj.xy) });
-
-                    ftr.fid = obj.fid;
-                    ftr.layer = layer;
-                    ftr.setStyle(istyle);
-                    src.addFeature(ftr);
-                }
-
-                return ftr;
-            },
-            //layer에 폴리라인 추가
-            addPolyline: function (obj) {
-                // obj = { 
-                //     lid   : layerId
-                //     fid   : featureId
-                //     data  : [[경도, 위도], [경도, 위도], ....]
-                //     state : 1
-                // }
-                const coordlist = obj.data;
-                const lyr = this.getLayer({lid : obj.lid});
-                
-                let coords = "";
-                
-                for(let i = 0; i < coordlist.length; i++){
-                    if(coords !== ""){
-                        coords += ",";
+                    return ftr;
+                }else if(layer.type === 'vector'){//마커와 폴리라인
+                    //마커인 경우
+                    // obj = { 
+                    //     lid   : layerId
+                    //     fid   : featureId
+                    //     type  : point
+                    //     xy    : [경도, 위도]
+                    //     state : 표출 이미지(layer 속성 중 URL의 index 번호)
+                    // }
+                    if(obj.type === 'point'){
+                        if(124.5 < obj.xy[0] && obj.xy[0] < 132.0 && 33 < obj.xy[1] && obj.xy[1] < 38.9){
+                            //우리나라 유효좌표 안에 있는 경우 생성
+                            let src = layer.getSource();
+            
+                            let ftr = this.getFeature(obj);
+            
+                            if (ftr === null) {
+                                if (layer.istyle.length < obj.state + 1) {
+                                    obj.state = 0;
+                                }
+            
+                                let istyle = layer.istyle[obj.state];
+            
+                                ftr = new Feature({ geometry: new Point(obj.xy) });
+            
+                                ftr.fid = obj.fid;
+                                ftr.type = obj.type;
+                                ftr.layer = layer;
+                                ftr.setStyle(istyle);
+                                ftr.data = obj?.data || {}; //feature 정보 저장
+                                src.addFeature(ftr);
+                            }
+                            return ftr;
+                        }else{
+                            return null;
+                        }
+                    }else if(obj.type === 'polyline'){
+                        //폴리라인인 경우
+                        // obj = { 
+                        //     lid   : layerId
+                        //     fid   : featureId
+                        //     type  : polyline
+                        //     data  : [[경도, 위도], [경도, 위도], ....]
+                        //     state : 1
+                        // }
+                        const coordlist = obj.data;
+                        const lyr = this.getLayer({lid : obj.lid});
+                        
+                        let coords = "";
+                        
+                        for(let i = 0; i < coordlist.length; i++){
+                            if(coords !== ""){
+                                coords += ",";
+                            }
+                            
+                            coords += coordlist[i][0] + " " + coordlist[i][1];
+                        }
+                        
+                        const lineStr = new WKT().readFeatures("GEOMETRYCOLLECTION(LINESTRING(" + coords + "))", {});
+                        lineStr[0].fid = obj.fid;
+                        lineStr[0].data = obj?.data || {}; //polyline 정보 저장
+                        lineStr[0].type = obj.type;
+                        
+                        lyr.getSource().addFeatures(lineStr);
+                        lyr.setStyle(lyr.istyle[obj.state]);
                     }
-                    
-                    coords += coordlist[i][0] + " " + coordlist[i][1];
                 }
-                
-                const lineStr = new WKT().readFeatures("GEOMETRYCOLLECTION(LINESTRING(" + coords + "))", {});
-                lineStr[0].fid = obj.fid;
-                
-                lyr.getSource().addFeatures(lineStr);
-                lyr.setStyle(lyr.istyle[obj.state]);
             },
             //layer에 특정 feature 조회
             getFeature: function (obj) {
@@ -435,30 +561,50 @@ const OL = new ($Class({
             },
 
             /******************** 이벤트 관련 함수 ********************/
+            // feature style 변경
+            changeFeatureStyle : function(obj){
+                const feature = this.getFeature({
+                    lid : obj.lid,
+                    fid : obj.fid
+                });
+
+                if(feature !== null || feature !== undefined){
+                    const style = new Style(obj.style);
+                    feature.setStyle(style);
+                }
+            },
             // 셀렉트 & 언셀렉트 이벤트 추가
             setClickEvt: function () {
                 var that = this;
                 that.map.on('click', function (e) {
                     let layers = e.target.getLayers().getArray();
 
+                    //레이어 클릭 이벤트
                     for (let i = 0; i < layers.length; i++) {
                         if (layers[i].click !== undefined) {
-                            console.log('실행');
                             return layers[i].click.apply(null, [e]);
                         }
                     }
 
+                    //overlay 모두 삭제 - 모두 삭제 하고 개별 클릭 이벤트로 알아서 overlay 추가해야함.
+                    OL.map.removeOverlayAll();
+
+                    //레이어 위의 feature 클릭 이벤트
                     var result = that.map.forEachFeatureAtPixel(e.pixel, function (ftr) {
+                        if(ftr.layer?.values_.opacity === 0){
+                            return null;
+                        }
+                        
                         if (ftr === undefined || ftr === null) {
                             return null;
                         }
-                        if (ftr.layer.onSelect === undefined || ftr.layer.onSelect === null) {
+
+                        if (ftr.layer?.onSelect === undefined || ftr.layer.onSelect === null) {
                             return null;
                         }
+                        
                         ftr.layer.onSelect(ftr, e);
                         that.selectedObj = ftr;
-
-                        // const snap = new Snap({source: ftr.layer.getSource()});
 
                         return ftr;
                     });
@@ -508,6 +654,22 @@ const OL = new ($Class({
                         }
                         that.onmousemoveObj.layer.onmouseleave(that.onmousemoveObj, e);
                         that.onmousemoveObj = null;
+                    } 
+                });
+
+                //마우스 오버시 포인터 변경
+                that.map.on("pointermove", function (evt) {
+                    var hit = this.forEachFeatureAtPixel(evt.pixel, function(feature, layer) {
+                        if(layer.values_.opacity === 0 || feature.type !== 'point'){
+                            return false;
+                        } else{
+                            return true;
+                        }
+                    }); 
+                    if (hit) {
+                        this.getTargetElement().style.cursor = 'pointer';
+                    } else {
+                        this.getTargetElement().style.cursor = '';
                     }
                 });
             },
@@ -555,12 +717,11 @@ const OL = new ($Class({
             // 원 애니메이션
             playFcltEvt(feature, cretCycl){
                 const duration = cretCycl;
-
                 const start = Date.now();
                 const flashGeom = feature.getGeometry().clone();
                 
                 const listenerKey = this.getLayer({lid : feature.layer.lid}).on('postrender', animate);
-
+                
                 function animate(event) {
                     const frameState = event.frameState;
 
@@ -601,7 +762,84 @@ const OL = new ($Class({
 
                 this.getLayer({lid : feature.layer.lid}).getSource().addFeature(feature);
             },
+            // 전체 숨기기 이벤트
+            setHiddenAllEvt: function () {
+                let layers = this.map.getLayers().getArray();
 
+                for (let l = 0; l < layers.length; l++) {
+                    if(layers[l].values_?.type === 'Tile'){
+                        continue;
+                    }
+                    layers[l].setOpacity(0);
+                }
+            },
+            // 전체 보여주기 이벤트
+            setVisibleAllEvt: function () {
+                let layers = this.map.getLayers().getArray();
+                
+                for (let l = 1; l < layers.length; l++) {
+                    if(layers[l].values_?.type === 'Tile'){
+                        continue;
+                    }
+                    layers[l].setOpacity(1);
+                }
+            },
+            // 전달받은 레이어 보여주기 이벤트
+            setVisibleEvt: function (layer) {
+                let layers = this.map.getLayers().getArray();
+                
+                console.log(layers[1]);
+
+                for (let l = 1; l < layers.length; l++) {
+                    if(layer.includes(layers[l].lid)){
+                        layers[l].setOpacity(1);
+                    }
+                }
+            },
+            //이동 애니매이션(초안)
+            moveEvt(obj) {
+                const {
+                    route, //이동할 경로
+                    ftr,   //이동할 마커
+                    spd    //이동 속도(10 ~ 999)
+                } = obj
+
+                const position = ftr.getGeometry().clone();
+
+                const vectorLayer = new VectorLayer({
+                    source: new VectorSource({
+                        features: [route, ftr]
+                    }),
+                });
+
+                this.map.addLayer(vectorLayer);
+                
+                let distance = 0;
+                let lastTime = Date.now();
+
+                function moveFeature(event) {
+                    const speed = spd;
+                    const time = event.frameState.time;
+                    const elapsedTime = time - lastTime; //재생시간
+
+                    distance = (distance + (speed * elapsedTime) / 1e6);
+                    
+                    if(distance < 2){
+                        lastTime = time;
+    
+                        const currentCoordinate = route.getGeometry().geometries_[0].getCoordinateAt(distance);
+                        position.setCoordinates(currentCoordinate);
+                        
+                        ftr.setGeometry(position);
+                        map.render();
+                    }else{
+                        vectorLayer.un('postrender', moveFeature);
+                    }
+                }
+
+                vectorLayer.on('postrender', moveFeature);
+                ftr.setGeometry(null);
+            }
             /******************** 미사용함수 ********************/
             // /*geojson 읽기*/
             // readGeoJson: function (result, lyr) {
